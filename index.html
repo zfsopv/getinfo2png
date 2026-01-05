@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>get_info日志分析工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .upload-section {
+            padding: 30px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .file-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            background: #f8f9fa;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-input:hover {
+            border-color: #764ba2;
+            background: #f0f2f5;
+        }
+
+        .file-input:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .config-section {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .config-item {
+            margin: 15px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .config-item label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .config-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-message {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .charts-container {
+            padding: 20px;
+            display: none;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .chart-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .export-section {
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #eee;
+            display: none;
+        }
+
+        .warning-section {
+            padding: 15px;
+            margin: 20px 0;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            color: #856404;
+            display: none;
+        }
+
+        .reboot-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #28a745;
+            z-index: 10;
+        }
+
+        .reboot-label {
+            position: absolute;
+            top: 10px;
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            transform: translateX(-50%);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-wrapper {
+                padding: 15px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            header {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* 添加切换开关样式 */
+        .toggle-section {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .toggle-label input[type="checkbox"] {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background-color: #ccc;
+            border-radius: 20px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-slider:before {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .toggle-label input[type="checkbox"]:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+
+        .toggle-label input[type="checkbox"]:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* 隐藏类 */
+        .hidden {
+            display: none !important;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>get_info日志分析工具</h1>
+            <div class="subtitle">选择get_info日志文件，生成可视化图表。</div>
+            <div class="subtitle">注：数据处理在本地，不要选择超过300MB的日志文件，防止将浏览器卡死。</div>
+        </header>
+
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="logFile" class="file-input" accept=".log,.txt">
+            </div>
+
+            <!-- 添加一个开关来控制配置部分的显示 -->
+            <div class="toggle-section">
+                <label class="toggle-label">
+                    <input type="checkbox" id="showConfigToggle" onchange="toggleConfigSection()">
+                    <span class="toggle-slider"></span>
+                    显示图表配置
+                </label>
+            </div>
+
+            <!-- 将配置部分包裹在一个可隐藏的容器中 -->
+            <div class="config-section hidden" id="configSection">
+                <h3>图表配置</h3>
+                <div id="configItems">
+                    <!-- 配置项将通过JavaScript动态生成 -->
+                </div>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="addConfigItem()">添加监控项</button>
+                    <button type="button" class="btn btn-secondary" onclick="loadDefaultConfig()">加载默认配置</button>
+                </div>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+            </div>
+
+            <div class="status-message" id="statusMessage"></div>
+
+            <div class="warning-section" id="warningSection"></div>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-primary" onclick="processLogFile()">开始分析</button>
+                <button type="button" class="btn btn-secondary" onclick="resetAll()">重置</button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在分析日志文件，请稍候...</p>
+        </div>
+
+        <!-- 添加一个开关来控制分析结果的显示 -->
+        <div class="toggle-section">
+            <label class="toggle-label">
+                <input type="checkbox" id="showResultsToggle" onchange="toggleResultsSection()">
+                <span class="toggle-slider"></span>
+                显示分析结果
+            </label>
+        </div>
+
+        <!-- 将分析结果部分包裹在一个可隐藏的容器中 -->
+        <div class="charts-container hidden" id="chartsContainer">
+            <h2>分析结果</h2>
+            <div class="chart-grid" id="chartGrid"></div>
+        </div>
+
+        <!-- 将导出部分也包裹在可隐藏的容器中 -->
+        <div class="export-section hidden" id="exportSection">
+            <div class="button-group">
+                <button type="button" class="btn btn-success" onclick="exportAsPNG()">导出为PNG</button>
+                <button type="button" class="btn btn-success" onclick="exportAsPDF()">导出为PDF</button>
+                <button type="button" class="btn btn-success" onclick="exportData()">导出数据</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 默认配置
+        const defaultConfig = {
+            info: [
+                {
+                    name: "BOOT_TIME",
+                    info_name: "BOOT_TIME",
+                    y_name: "BOOT TIME(s)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "CHIP_TEMP",
+                    info_name: "CHIP_TEMP",
+                    y_name: "CHIP TEMP(℃)",
+                    sampling_index: [0, 0],
+                    min: -10,
+                    max: 120,
+                    y_flags: [0, 85, 90, 95, 100, 105]
+                },
+                {
+                    name: "BOARD_TEMP",
+                    info_name: "BOARD_TEMP",
+                    y_name: "BOARD TEMP(℃)",
+                    sampling_index: [0, 0],
+                    min: -10,
+                    max: 120,
+                    y_flags: [0, 85, 90, 95, 100, 105]
+                },
+                {
+                    name: "TPU_CLK",
+                    info_name: "TPU_CLK",
+                    y_name: "TPU CLK(Hz)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 1100000000,
+                    y_flags: [950000000]
+                },
+                {
+                    name: "CPU_CLK",
+                    info_name: "CPU_CLK",
+                    y_name: "CPU CLK(Hz)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 2400000000,
+                    y_flags: [2300000000]
+                },
+                {
+                    name: "VPU_CLK",
+                    info_name: "VPU_CLK",
+                    y_name: "VPU CLK(Hz)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 900000000,
+                    y_flags: [500000000, 800000000]
+                },
+                {
+                    name: "TPU_USAGE0",
+                    info_name: "TPU_USAGE",
+                    y_name: "TPU0 USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "TPU_USAGE1",
+                    info_name: "TPU_USAGE",
+                    y_name: "TPU1 USAGE(%)",
+                    sampling_index: [1, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_USAGE0",
+                    info_name: "VPU_USAGE",
+                    y_name: "VPU0 USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_USAGE1",
+                    info_name: "VPU_USAGE",
+                    y_name: "VPU1 USAGE(%)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_USAGE2",
+                    info_name: "VPU_USAGE",
+                    y_name: "VPU2 USAGE(%)",
+                    sampling_index: [0, 2],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_USAGE3",
+                    info_name: "VPU_USAGE",
+                    y_name: "VPU3 USAGE(%)",
+                    sampling_index: [0, 3],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_USAGE4",
+                    info_name: "VPU_USAGE",
+                    y_name: "VPU4 USAGE(%)",
+                    sampling_index: [0, 4],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_USAGE0",
+                    info_name: "VPP_USAGE",
+                    y_name: "VPP9 USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_USAGE1",
+                    info_name: "VPP_USAGE",
+                    y_name: "VPP1 USAGE(%)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_USAGE2",
+                    info_name: "VPP_USAGE",
+                    y_name: "VPP2 USAGE(%)",
+                    sampling_index: [0, 2],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_USAGE3",
+                    info_name: "VPP_USAGE",
+                    y_name: "VPP3 USAGE(%)",
+                    sampling_index: [0, 3],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_USAGE4",
+                    info_name: "VPP_USAGE",
+                    y_name: "VPP4 USAGE(%)",
+                    sampling_index: [0, 4],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "CPU_ALL_USAGE",
+                    info_name: "CPU_ALL_USAGE",
+                    y_name: "CPU USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "V12_POWER",
+                    info_name: "V12_POWER",
+                    y_name: "SM7 POWER(mW)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 80000,
+                    y_flags: [60000]
+                },
+                {
+                    name: "VTPU_POWER",
+                    info_name: "VTPU_POWER",
+                    y_name: "BM1684X TPU POWER(W)",
+                    sampling_index: [0, 0],
+                    min: null,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "VDDC_POWER",
+                    info_name: "VDDC_POWER",
+                    y_name: "BM1684X VDDC POWER(W)",
+                    sampling_index: [0, 0],
+                    min: null,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "SYSTEM_MEM_USAGE",
+                    info_name: "SYSTEM_MEM_USAGE",
+                    y_name: "SYSTEM MEM USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "TPU_MEM_USAGE",
+                    info_name: "TPU_MEM_USAGE",
+                    y_name: "TPU MEM USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPU_MEM_USAGE",
+                    info_name: "VPU_MEM_USAGE",
+                    y_name: "VPU MEM USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "VPP_MEM_USAGE",
+                    info_name: "VPP_MEM_USAGE",
+                    y_name: "VPP MEM USAGE(%)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 100,
+                    y_flags: []
+                },
+                {
+                    name: "FAN_RPM",
+                    info_name: "FAN_RPM",
+                    y_name: "FAN RPM(rpm)",
+                    sampling_index: [0, 0],
+                    min: 0,
+                    max: 10000,
+                    y_flags: []
+                },
+                {
+                    name: "NET_SPEED_UPLOAD-eth0",
+                    info_name: "NET_SPEED_UPLOAD",
+                    y_name: "NET UPLOAD ETH0(KiB/s)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "NET_SPEED_DOWNLOAD-eth0",
+                    info_name: "NET_SPEED_DOWNLOAD",
+                    y_name: "NET DOWNLOAD ETH0(KiB/s)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "NET_SPEED_UPLOAD-eth1",
+                    info_name: "NET_SPEED_UPLOAD",
+                    y_name: "NET UPLOAD ETH1(KiB/s)",
+                    sampling_index: [1, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "NET_SPEED_DOWNLOAD-eth1",
+                    info_name: "NET_SPEED_DOWNLOAD",
+                    y_name: "NET DOWNLOAD ETH1(KiB/s)",
+                    sampling_index: [1, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "DISK_SPEED_READ-mmc0",
+                    info_name: "DISK_SPEED_READ",
+                    y_name: "DISK READ MMC0(KiB/s)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                },
+                {
+                    name: "DISK_SPEED_WRITE-mmc0",
+                    info_name: "DISK_SPEED_WRITE",
+                    y_name: "DISK WRITE MMC0(KiB/s)",
+                    sampling_index: [0, 1],
+                    min: 0,
+                    max: null,
+                    y_flags: []
+                }
+            ],
+            point_size: 1
+        };
+
+        // 当前配置
+        let currentConfig = JSON.parse(JSON.stringify(defaultConfig));
+        let logData = null;
+        let charts = [];
+
+        // 初始化配置界面
+        function initConfigUI() {
+            const container = document.getElementById('configItems');
+            container.innerHTML = '';
+
+            currentConfig.info.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'config-item';
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label>监控项 ${index + 1}</label>
+                        <button type="button" onclick="removeConfigItem(${index})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">删除</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                        <div>
+                            <label>名称</label>
+                            <input type="text" class="config-input" value="${item.name}"
+                                   onchange="updateConfig(${index}, 'name', this.value)">
+                        </div>
+                        <div>
+                            <label>日志关键字</label>
+                            <input type="text" class="config-input" value="${item.info_name}"
+                                   onchange="updateConfig(${index}, 'info_name', this.value)">
+                        </div>
+                        <div>
+                            <label>Y轴标签</label>
+                            <input type="text" class="config-input" value="${item.y_name}"
+                                   onchange="updateConfig(${index}, 'y_name', this.value)">
+                        </div>
+                        <div>
+                            <label>采样索引</label>
+                            <input type="text" class="config-input" value="${JSON.stringify(item.sampling_index)}"
+                                   onchange="updateConfig(${index}, 'sampling_index', JSON.parse(this.value))">
+                        </div>
+                        <div>
+                            <label>最小值</label>
+                            <input type="number" class="config-input" value="${item.min || ''}"
+                                   onchange="updateConfig(${index}, 'min', parseFloat(this.value))">
+                        </div>
+                        <div>
+                            <label>最大值</label>
+                            <input type="number" class="config-input" value="${item.max || ''}"
+                                   onchange="updateConfig(${index}, 'max', parseFloat(this.value))">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 更新配置
+        function updateConfig(index, key, value) {
+            if (value !== undefined && value !== null && value !== '') {
+                currentConfig.info[index][key] = value;
+            } else {
+                delete currentConfig.info[index][key];
+            }
+        }
+
+        // 添加配置项
+        function addConfigItem() {
+            currentConfig.info.push({
+                name: `item_${currentConfig.info.length + 1}`,
+                info_name: "NEW_ITEM",
+                y_name: "新监控项",
+                sampling_index: [0, 0]
+            });
+            initConfigUI();
+        }
+
+        // 删除配置项
+        function removeConfigItem(index) {
+            currentConfig.info.splice(index, 1);
+            initConfigUI();
+        }
+
+        // 加载默认配置
+        function loadDefaultConfig() {
+            currentConfig = JSON.parse(JSON.stringify(defaultConfig));
+            initConfigUI();
+        }
+
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+        }
+
+        // 隐藏状态消息
+        function hideStatus() {
+            document.getElementById('statusMessage').style.display = 'none';
+        }
+
+        // 显示警告
+        function showWarning(message) {
+            const warningEl = document.getElementById('warningSection');
+            warningEl.textContent = message;
+            warningEl.style.display = 'block';
+        }
+
+        // 隐藏警告
+        function hideWarning() {
+            document.getElementById('warningSection').style.display = 'none';
+        }
+
+        // 更新进度条
+        function updateProgress(percent, message = '') {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+
+            progressContainer.style.display = 'block';
+            progressFill.style.width = `${percent}%`;
+            progressFill.textContent = `${Math.round(percent)}%`;
+
+            if (message) {
+                showStatus(message, 'info');
+            }
+        }
+
+        // 处理日志文件
+        async function processLogFile() {
+            const fileInput = document.getElementById('logFile');
+            if (!fileInput.files.length) {
+                showStatus('请先选择日志文件', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            if (file.size > 300 * 1024 * 1024) {
+                showStatus('文件大小超过300MB限制', 'error');
+                return;
+            }
+
+            // 显示加载动画
+            document.getElementById('loading').style.display = 'block';
+            hideStatus();
+            hideWarning();
+
+            try {
+                updateProgress(10, '正在读取文件...');
+
+                // 读取文件内容
+                const text = await file.text();
+
+                updateProgress(30, '正在解析日志数据...');
+
+                // 解析日志数据
+                logData = parseLogData(text);
+
+                updateProgress(70, '正在生成图表...');
+
+                // 生成图表
+                generateCharts(logData);
+
+                updateProgress(100, '分析完成！');
+
+                // 显示结果
+                document.getElementById('chartsContainer').style.display = 'block';
+                document.getElementById('exportSection').style.display = 'block';
+                showStatus('分析完成！', 'success');
+
+            } catch (error) {
+                console.error('处理文件时出错:', error);
+                showStatus(`处理文件时出错: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('progressContainer').style.display = 'none';
+            }
+        }
+
+        // 解析日志数据
+        function parseLogData(text) {
+            const lines = text.split('\n');
+            const result = {
+                bootTimes: [],
+                bootOstTimes: [],
+                rebootFlags: [],
+                data: {},
+                warnings: []
+            };
+
+            let basicTime = 0;
+            const missingDataItems = new Set();
+
+            // 初始化数据结构
+            currentConfig.info.forEach(item => {
+                result.data[item.name] = [];
+                missingDataItems.add(item.name);
+            });
+
+            // 解析每一行
+            lines.forEach((line, lineIndex) => {
+                // 解析BOOT_TIME
+                if (line.includes('BOOT_TIME(s)')) {
+                    try {
+                        const parts = line.split('|');
+                        if (parts.length >= 2) {
+                            const ostTimeStr = parts[parts.length - 2].split('.')[0];
+                            const ostTime = parseInt(ostTimeStr) / 60;
+
+                            if (result.bootOstTimes.length > 0 && ostTime < result.bootOstTimes[result.bootOstTimes.length - 1]) {
+                                basicTime = result.bootTimes[result.bootTimes.length - 1];
+                                result.rebootFlags.push(basicTime);
+                            }
+
+                            const currTime = ostTime + basicTime;
+                            result.bootOstTimes.push(ostTime);
+                            result.bootTimes.push(currTime);
+                        }
+                    } catch (e) {
+                        console.warn(`解析BOOT_TIME失败，行 ${lineIndex}:`, e);
+                    }
+                }
+
+                // 解析监控数据
+                currentConfig.info.forEach((item, itemIndex) => {
+                    if (line.includes(item.info_name)) {
+                        try {
+                            const parts = line.split('|');
+                            if (parts.length >= 2) {
+                                const dataParts = parts[parts.length - 2].split(' ');
+                                if (dataParts.length > item.sampling_index[0]) {
+                                    const subParts = dataParts[item.sampling_index[0]].split(',');
+                                    if (subParts.length > item.sampling_index[1]) {
+                                        const value = parseFloat(subParts[item.sampling_index[1]]);
+                                        if (!isNaN(value)) {
+                                            // 应用最小最大值限制
+                                            let finalValue = value;
+                                            if (item.min !== undefined) finalValue = Math.max(finalValue, item.min);
+                                            if (item.max !== undefined) finalValue = Math.min(finalValue, item.max);
+
+                                            result.data[item.name].push(finalValue);
+                                            missingDataItems.delete(item.name);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`解析${item.name}数据失败，行 ${lineIndex}:`, e);
+                        }
+                    }
+                });
+            });
+
+            // 处理缺失数据
+            missingDataItems.forEach(itemName => {
+                result.warnings.push(`无法找到数据: ${itemName}`);
+            });
+
+            // 对齐数据长度
+            if (result.bootTimes.length > 0) {
+                const baseTime = result.bootTimes[0];
+                result.bootTimes = result.bootTimes.map(t => t - baseTime);
+                result.rebootFlags = result.rebootFlags.map(t => t - baseTime);
+
+                // 补齐缺失的数据点
+                currentConfig.info.forEach(item => {
+                    const dataArray = result.data[item.name];
+                    while (dataArray.length < result.bootTimes.length) {
+                        dataArray.push(dataArray.length > 0 ? dataArray[dataArray.length - 1] : 0);
+                    }
+                });
+            }
+
+            return result;
+        }
+
+        // 生成图表
+        function generateCharts(logData) {
+            const chartGrid = document.getElementById('chartGrid');
+            chartGrid.innerHTML = '';
+
+            // 销毁之前的图表
+            charts.forEach(chart => chart.destroy());
+            charts = [];
+
+            if (logData.bootTimes.length === 0) {
+                showWarning('未找到BOOT_TIME数据！');
+                return;
+            }
+
+            // 为每个监控项创建图表
+            currentConfig.info.forEach((item, index) => {
+                if (!logData.data[item.name] || logData.data[item.name].length === 0) {
+                    return;
+                }
+
+                const chartWrapper = document.createElement('div');
+                chartWrapper.className = 'chart-wrapper';
+
+                const chartTitle = document.createElement('div');
+                chartTitle.className = 'chart-title';
+                chartTitle.textContent = item.y_name;
+
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+
+                const canvas = document.createElement('canvas');
+                chartContainer.appendChild(canvas);
+
+                chartWrapper.appendChild(chartTitle);
+                chartWrapper.appendChild(chartContainer);
+                chartGrid.appendChild(chartWrapper);
+
+                // 创建图表
+                const ctx = canvas.getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: item.y_name,
+                            data: logData.bootTimes.map((time, i) => ({
+                                x: time,
+                                y: logData.data[item.name][i]
+                            })),
+                            backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 1,
+                            pointRadius: currentConfig.point_size || 1,
+                            pointHoverRadius: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: {
+                                    display: true,
+                                    text: '时间 (分钟)'
+                                },
+                                min: logData.bootTimes[0],
+                                max: logData.bootTimes[logData.bootTimes.length - 1],
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: item.y_name
+                                },
+                                min: item.min !== undefined ? item.min : undefined,
+                                max: item.max !== undefined ? item.max : undefined,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        return `${item.y_name}: ${context.parsed.y.toFixed(2)}`;
+                                    }
+                                }
+                            },
+                            // 添加 annotation 配置
+                            annotation: {
+                                annotations: item.y_flags ? item.y_flags.map((flagValue, index) => {
+                                    // 使用不同的颜色区分不同的标记线
+                                    const colors = [
+                                        'rgba(255, 99, 132, 0.8)',  // 红色
+                                        'rgba(54, 162, 235, 0.8)',  // 蓝色
+                                        'rgba(255, 206, 86, 0.8)',  // 黄色
+                                        'rgba(75, 192, 192, 0.8)',  // 绿色
+                                        'rgba(153, 102, 255, 0.8)'  // 紫色
+                                    ];
+
+                                    return {
+                                        type: 'line',
+                                        yMin: flagValue,
+                                        yMax: flagValue,
+                                        borderColor: colors[index % colors.length],
+                                        borderWidth: 1.5,
+                                        borderDash: index % 2 === 0 ? [5, 5] : [0], // 交替使用虚线和实线
+                                        label: {
+                                            display: true,
+                                            content: `${flagValue.toLocaleString()}`,
+                                            position: 'end',
+                                            backgroundColor: colors[index % colors.length],
+                                            color: 'white',
+                                            font: {
+                                                size: 9,
+                                                weight: 'bold'
+                                            },
+                                            padding: {
+                                                top: 2,
+                                                bottom: 2,
+                                                left: 4,
+                                                right: 4
+                                            }
+                                        }
+                                    }
+                                }) : []
+                            }
+                        }
+                    }
+                });
+
+                // 添加重启标记线
+                logData.rebootFlags.forEach(flagTime => {
+                    chart.data.datasets.push({
+                        type: 'line',
+                        label: '重启标记',
+                        data: [
+                            { x: flagTime, y: chart.scales.y.min },
+                            { x: flagTime, y: chart.scales.y.max }
+                        ],
+                        borderColor: 'rgba(40, 167, 69, 0.7)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    });
+                });
+
+                chart.update();
+                charts.push(chart);
+            });
+
+            // 显示警告信息
+            if (logData.warnings.length > 0) {
+                showWarning(logData.warnings.join('; '));
+            }
+        }
+
+        // 导出为PNG
+        function exportAsPNG() {
+            const link = document.createElement('a');
+            link.download = `get_info_analysis_${new Date().toISOString().slice(0, 10)}.png`;
+
+            // 创建包含所有图表的图像
+            const chartsContainer = document.getElementById('chartsContainer');
+            html2canvas(chartsContainer).then(canvas => {
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        // 导出为PDF
+        function exportAsPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+
+            charts.forEach((chart, index) => {
+                if (index > 0) {
+                    doc.addPage();
+                }
+
+                const canvas = chart.canvas;
+                const imgData = canvas.toDataURL('image/png');
+                doc.text(currentConfig.info[index].y_name, 10, 10);
+                doc.addImage(imgData, 'PNG', 10, 20, 180, 100);
+            });
+
+            doc.save(`get_info_analysis_${new Date().toISOString().slice(0, 10)}.pdf`);
+        }
+
+        // 导出数据
+        function exportData() {
+            if (!logData) return;
+
+            const exportObj = {
+                config: currentConfig,
+                data: logData,
+                exportTime: new Date().toISOString()
+            };
+
+            const dataStr = JSON.stringify(exportObj, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `get_info_data_${new Date().toISOString().slice(0, 10)}.json`;
+            link.click();
+
+            URL.revokeObjectURL(url);
+        }
+
+        // 重置所有
+        function resetAll() {
+            // 重置文件输入
+            document.getElementById('logFile').value = '';
+
+            // 重置配置
+            loadDefaultConfig();
+
+            // 隐藏结果区域
+            document.getElementById('chartsContainer').style.display = 'none';
+            document.getElementById('exportSection').style.display = 'none';
+
+            // 清除状态消息
+            hideStatus();
+            hideWarning();
+
+            // 销毁图表
+            charts.forEach(chart => chart.destroy());
+            charts = [];
+
+            // 清空数据
+            logData = null;
+        }
+
+        // JavaScript函数来控制显示/隐藏
+        function toggleConfigSection() {
+            const configSection = document.getElementById('configSection');
+            const toggle = document.getElementById('showConfigToggle');
+
+            if (toggle.checked) {
+                configSection.classList.remove('hidden');
+            } else {
+                configSection.classList.add('hidden');
+            }
+        }
+
+        function toggleResultsSection() {
+            const chartsContainer = document.getElementById('chartsContainer');
+            const exportSection = document.getElementById('exportSection');
+            const toggle = document.getElementById('showResultsToggle');
+
+            if (toggle.checked) {
+                chartsContainer.classList.remove('hidden');
+                exportSection.classList.remove('hidden');
+            } else {
+                chartsContainer.classList.add('hidden');
+                exportSection.classList.add('hidden');
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initConfigUI();
+
+            // 监听文件选择
+            document.getElementById('logFile').addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    showStatus(`已选择文件: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`, 'info');
+                }
+            });
+
+            document.getElementById('configSection').classList.add('hidden');
+            document.getElementById('chartsContainer').classList.remove('hidden');
+            document.getElementById('exportSection').classList.remove('hidden');
+
+            document.getElementById('showConfigToggle').checked = false;
+            document.getElementById('showResultsToggle').checked = true;
+        });
+
+        // 添加html2canvas库（用于导出PNG）
+        const html2canvasScript = document.createElement('script');
+        html2canvasScript.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+        document.head.appendChild(html2canvasScript);
+
+        // 添加jsPDF库（用于导出PDF）
+        const jsPDFScript = document.createElement('script');
+        jsPDFScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        document.head.appendChild(jsPDFScript);
+    </script>
+</body>
+</html>
+
