@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>get_info 日志转 PNG（单文件）</title>
+  <title>get_info 日志转 PNG（批量）</title>
   <style>
     :root {
       --bg: #0f1117;
@@ -291,20 +291,94 @@
     .preview-wrap {
       margin-top: 22px;
       display: none;
-      border-radius: var(--radius);
-      overflow: hidden;
-      border: 1px solid var(--border);
-      background: #fff;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
     }
     .preview-wrap.show { display: block; animation: fade-in .35s ease; }
     @keyframes fade-in {
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
     }
-    .preview-wrap img {
+    .preview-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--text-sub);
+      font-size: 13px;
+    }
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .preview-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+    }
+    .preview-card.is-error {
+      border-color: rgba(248,113,113,0.35);
+    }
+    .preview-thumb {
+      background: #fff;
+      aspect-ratio: 4 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .preview-card.is-error .preview-thumb {
+      background: linear-gradient(180deg, rgba(248,113,113,0.18), rgba(15,17,23,0.95));
+    }
+    .preview-thumb img {
       width: 100%;
+      height: 100%;
+      object-fit: contain;
       display: block;
+    }
+    .preview-thumb-empty {
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+    .preview-body {
+      padding: 14px;
+    }
+    .preview-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.5;
+      word-break: break-all;
+    }
+    .preview-meta {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .preview-note {
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--warn);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .preview-error {
+      color: var(--err);
+    }
+    .preview-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+    .btn-sm {
+      padding: 8px 14px;
+      font-size: 13px;
     }
 
     /* ── 页脚 ── */
@@ -324,15 +398,15 @@
         <span>📊</span> 浏览器内 Python · Matplotlib
       </div>
       <h1>get_info 日志转 PNG</h1>
-      <p>拖拽或选择 <code style="background:rgba(99,102,241,0.15);color:#a5b4fc;padding:1px 6px;border-radius:4px;">.log</code> 文件，在浏览器内运行与原 Python 脚本等价的 Matplotlib 绘图逻辑，无需服务器。</p>
+      <p>拖拽或选择一个或多个 <code style="background:rgba(99,102,241,0.15);color:#a5b4fc;padding:1px 6px;border-radius:4px;">.log</code> 文件，在浏览器内运行与原 Python 脚本等价的 Matplotlib 绘图逻辑，无需服务器。</p>
     </div>
 
     <div class="card">
-      <input id="fileInput" type="file" accept=".log" hidden>
+      <input id="fileInput" type="file" accept=".log" multiple hidden>
       <div id="drop" class="drop">
         <span class="drop-icon">📂</span>
         <div class="drop-title" id="dropTitle">点击选择或拖拽 .log 文件到这里</div>
-        <div class="drop-sub">支持任意大小的 get_info 日志文件</div>
+        <div class="drop-sub">支持批量导入多个 get_info 日志文件</div>
       </div>
 
       <div class="dpi-row">
@@ -346,7 +420,7 @@
           <span>⚡</span> 生成 PNG
         </button>
         <button id="saveBtn" class="btn btn-secondary" disabled>
-          <span>💾</span> 保存 PNG
+          <span>💾</span> 下载 ZIP
         </button>
       </div>
 
@@ -360,11 +434,14 @@
       </div>
 
       <div class="preview-wrap" id="previewWrap">
-        <img id="preview" alt="PNG 预览">
+        <div class="preview-head">
+          <span id="previewSummary">生成结果</span>
+        </div>
+        <div class="preview-grid" id="previewGrid"></div>
       </div>
     </div>
 
-    <div class="footer">单文件 HTML · 无需联网（除首次加载 Pyodide）· 数据不离开本地浏览器</div>
+    <div class="footer">单文件 HTML · 支持批量处理与 ZIP 导出 · 无需联网（除首次加载 Pyodide）· 数据不离开本地浏览器</div>
   </div>
 
   <script type="module">
@@ -574,7 +651,8 @@ info:
     const fileInput   = document.getElementById("fileInput");
     const runBtn      = document.getElementById("runBtn");
     const saveBtn     = document.getElementById("saveBtn");
-    const previewEl   = document.getElementById("preview");
+    const previewGrid = document.getElementById("previewGrid");
+    const previewSummary = document.getElementById("previewSummary");
     const previewWrap = document.getElementById("previewWrap");
     const progressWrap= document.getElementById("progressWrap");
     const dpiRange    = document.getElementById("dpiRange");
@@ -583,8 +661,10 @@ info:
     dpiRange.addEventListener("input", () => { dpiVal.textContent = dpiRange.value; });
 
     let pyodide = null;
-    let selectedFile = null;
-    let pngBytes = null;
+    let pythonConverterLoaded = false;
+    let zipModulePromise = null;
+    let selectedFiles = [];
+    let generatedResults = [];
 
     const setStatus = (msg, mode = "idle") => {
       // mode: idle | loading | ok | err
@@ -602,7 +682,8 @@ info:
     }
 
     async function runConvert(logText, dpi) {
-      const code = `
+      if (!pythonConverterLoaded) {
+        const code = `
 import base64
 from io import BytesIO
 from decimal import Decimal, getcontext
@@ -703,9 +784,12 @@ def convert(log_text, config_yaml, dpi):
             item = configs["info"][idx]
             ax = get_ax(i, j)
             data_temp = infos_data[item["name"]]
+            target_len = len(boot_time_data)
 
-            if len(data_temp) < len(boot_time_data):
-                for _ in range(0, len(boot_time_data) - len(data_temp)):
+            if len(data_temp) > target_len:
+                del data_temp[target_len:]
+            elif len(data_temp) < target_len:
+                for _ in range(0, target_len - len(data_temp)):
                     d = data_temp[-1]
                     if item.get("max") is not None:
                         d = min(d, item["max"])
@@ -763,7 +847,9 @@ def convert(log_text, config_yaml, dpi):
     plt.close(fig)
     return base64.b64encode(buf.getvalue()).decode("ascii"), warning_info
 `;
-      pyodide.runPython(code);
+        pyodide.runPython(code);
+        pythonConverterLoaded = true;
+      }
       pyodide.globals.set("LOG_TEXT_JS", logText);
       pyodide.globals.set("CFG_YAML_JS", CONFIG_YAML);
       pyodide.globals.set("DPI_JS", dpi);
@@ -771,21 +857,198 @@ def convert(log_text, config_yaml, dpi):
       return pyRes.toJs();
     }
 
-    function setSelectedFile(file) {
-      if (!file) return;
-      if (!file.name.toLowerCase().endsWith(".log")) {
+    async function getZipConstructor() {
+      if (!zipModulePromise) {
+        zipModulePromise = import("https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm");
+      }
+      const zipModule = await zipModulePromise;
+      return zipModule.default;
+    }
+
+    function formatFileSize(size) {
+      return `${(size / 1024).toFixed(1)} KB`;
+    }
+
+    function getOutputFileName(file) {
+      return file.name.replace(/\.log$/i, "") + ".png";
+    }
+
+    function normalizeWarningInfo(warningInfo) {
+      const text = String(warningInfo || "").trim();
+      return text === "Cannot find data:" ? "" : text;
+    }
+
+    function revokeResultUrls(results) {
+      for (const result of results) {
+        if (result.url) URL.revokeObjectURL(result.url);
+      }
+    }
+
+    function clearResults() {
+      revokeResultUrls(generatedResults);
+      generatedResults = [];
+      previewGrid.innerHTML = "";
+      previewSummary.textContent = "生成结果";
+      previewWrap.classList.remove("show");
+      saveBtn.disabled = true;
+    }
+
+    function downloadBlob(fileName, blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function downloadBytes(fileName, bytes) {
+      downloadBlob(fileName, new Blob([bytes], { type: "image/png" }));
+    }
+
+    function downloadResult(result) {
+      if (!result?.bytes || !result?.file) return;
+      downloadBytes(getOutputFileName(result.file), result.bytes);
+    }
+
+    function getZipFileName() {
+      const now = new Date();
+      const pad = (value) => String(value).padStart(2, "0");
+      const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+      const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      return `get_info_png_${datePart}-${timePart}.zip`;
+    }
+
+    function getZipEntryName(fileName, seenNames) {
+      const count = seenNames.get(fileName) || 0;
+      seenNames.set(fileName, count + 1);
+      if (count === 0) return fileName;
+
+      const dotIndex = fileName.lastIndexOf(".");
+      const baseName = dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+      const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : "";
+      return `${baseName} (${count + 1})${ext}`;
+    }
+
+    function renderResults() {
+      previewGrid.innerHTML = "";
+      if (!generatedResults.length) {
+        previewSummary.textContent = "生成结果";
+        previewWrap.classList.remove("show");
+        return;
+      }
+
+      const successCount = generatedResults.filter((result) => result.bytes).length;
+      const failureCount = generatedResults.length - successCount;
+      previewSummary.textContent = failureCount > 0
+        ? `生成结果：成功 ${successCount}，失败 ${failureCount}`
+        : `生成结果：成功 ${successCount}`;
+
+      for (const result of generatedResults) {
+        const card = document.createElement("article");
+        card.className = "preview-card" + (result.error ? " is-error" : "");
+
+        const thumb = document.createElement("div");
+        thumb.className = "preview-thumb";
+        if (result.url) {
+          const img = document.createElement("img");
+          img.src = result.url;
+          img.alt = `${result.file.name} PNG 预览`;
+          thumb.appendChild(img);
+        } else {
+          const empty = document.createElement("div");
+          empty.className = "preview-thumb-empty";
+          empty.textContent = "生成失败，未创建预览";
+          thumb.appendChild(empty);
+        }
+
+        const body = document.createElement("div");
+        body.className = "preview-body";
+
+        const title = document.createElement("div");
+        title.className = "preview-title";
+        title.textContent = result.file.name;
+
+        const meta = document.createElement("div");
+        meta.className = "preview-meta";
+        meta.textContent = result.bytes
+          ? `源文件 ${formatFileSize(result.file.size)} · 输出 ${formatFileSize(result.bytes.length)}`
+          : `源文件 ${formatFileSize(result.file.size)} · 输出失败`;
+
+        body.appendChild(title);
+        body.appendChild(meta);
+
+        if (result.warningInfo) {
+          const note = document.createElement("div");
+          note.className = "preview-note";
+          note.textContent = result.warningInfo;
+          body.appendChild(note);
+        }
+
+        if (result.error) {
+          const error = document.createElement("div");
+          error.className = "preview-note preview-error";
+          error.textContent = result.error;
+          body.appendChild(error);
+        }
+
+        if (result.bytes) {
+          const actions = document.createElement("div");
+          actions.className = "preview-actions";
+
+          const saveOneBtn = document.createElement("button");
+          saveOneBtn.type = "button";
+          saveOneBtn.className = "btn btn-secondary btn-sm";
+          saveOneBtn.textContent = "保存此 PNG";
+          saveOneBtn.addEventListener("click", () => downloadResult(result));
+
+          actions.appendChild(saveOneBtn);
+          body.appendChild(actions);
+        }
+
+        card.appendChild(thumb);
+        card.appendChild(body);
+        previewGrid.appendChild(card);
+      }
+
+      previewWrap.classList.add("show");
+    }
+
+    function setSelectedFiles(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) return;
+
+      const logFiles = files.filter((file) => file.name.toLowerCase().endsWith(".log"));
+      const skippedCount = files.length - logFiles.length;
+
+      if (!logFiles.length) {
+        selectedFiles = [];
+        clearResults();
+        runBtn.disabled = true;
+        dropEl.classList.remove("has-file");
+        dropTitle.textContent = "点击选择或拖拽 .log 文件到这里";
         setStatus("只支持 .log 文件", "err");
         return;
       }
-      selectedFile = file;
+
+      selectedFiles = logFiles;
+      clearResults();
       runBtn.disabled = false;
       dropEl.classList.add("has-file");
-      dropTitle.textContent = `✅ ${file.name}`;
-      setStatus(`已选择：${file.name}（${(file.size/1024).toFixed(1)} KB）`, "idle");
+      dropTitle.textContent = logFiles.length === 1
+        ? `✅ ${logFiles[0].name}`
+        : `✅ 已选择 ${logFiles.length} 个 .log 文件`;
+
+      const totalSize = logFiles.reduce((sum, file) => sum + file.size, 0);
+      const skippedInfo = skippedCount > 0 ? `，已跳过 ${skippedCount} 个非 .log 文件` : "";
+      setStatus(`已选择 ${logFiles.length} 个文件（${formatFileSize(totalSize)}）${skippedInfo}`, "idle");
     }
 
     dropEl.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", (e) => setSelectedFile(e.target.files?.[0]));
+    fileInput.addEventListener("change", (e) => {
+      setSelectedFiles(e.target.files);
+      fileInput.value = "";
+    });
 
     ["dragenter", "dragover"].forEach((ev) => {
       dropEl.addEventListener(ev, (e) => {
@@ -799,31 +1062,59 @@ def convert(log_text, config_yaml, dpi):
         dropEl.classList.remove("drag");
       });
     });
-    dropEl.addEventListener("drop", (e) => setSelectedFile(e.dataTransfer?.files?.[0]));
+    dropEl.addEventListener("drop", (e) => setSelectedFiles(e.dataTransfer?.files));
+
+    function decodeBase64Png(base64Png) {
+      const bin = atob(base64Png);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
 
     runBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
+      if (!selectedFiles.length) return;
       runBtn.disabled = true;
       saveBtn.disabled = true;
-      previewWrap.classList.remove("show");
-      setStatus("正在读取日志...", "loading");
+      clearResults();
       try {
         const dpi = parseInt(dpiRange.value, 10);
-        const logText = await selectedFile.text();
+        setStatus(`正在准备批量任务（共 ${selectedFiles.length} 个文件）...`, "loading");
         await initPyodideIfNeeded();
-        setStatus("正在解析并绘图，日志较大时会稍慢...", "loading");
-        const [base64Png, warningInfo] = await runConvert(logText, dpi);
-        const bin = atob(base64Png);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-        pngBytes = bytes;
 
-        const blob = new Blob([bytes], { type: "image/png" });
-        const url = URL.createObjectURL(blob);
-        previewEl.src = url;
-        previewWrap.classList.add("show");
-        saveBtn.disabled = false;
-        setStatus(`生成成功（DPI=${dpi}）。${warningInfo || ""}`, "ok");
+        for (const [index, file] of selectedFiles.entries()) {
+          setStatus(`正在生成第 ${index + 1}/${selectedFiles.length} 个文件：${file.name}`, "loading");
+          try {
+            const logText = await file.text();
+            const [base64Png, warningInfoRaw] = await runConvert(logText, dpi);
+            const bytes = decodeBase64Png(base64Png);
+            const blob = new Blob([bytes], { type: "image/png" });
+            const url = URL.createObjectURL(blob);
+            generatedResults.push({
+              file,
+              bytes,
+              url,
+              warningInfo: normalizeWarningInfo(warningInfoRaw),
+            });
+          } catch (err) {
+            generatedResults.push({
+              file,
+              error: err.message || String(err),
+            });
+          }
+          renderResults();
+        }
+
+        const successCount = generatedResults.filter((result) => result.bytes).length;
+        const failureCount = generatedResults.length - successCount;
+        saveBtn.disabled = successCount === 0;
+
+        if (successCount === 0) {
+          setStatus(`批量生成失败：${failureCount} 个文件均未成功。`, "err");
+        } else if (failureCount > 0) {
+          setStatus(`批量生成完成：成功 ${successCount} 个，失败 ${failureCount} 个。`, "ok");
+        } else {
+          setStatus(`批量生成完成：${successCount} 个文件全部成功（DPI=${dpi}）。`, "ok");
+        }
       } catch (err) {
         setStatus(`失败：${err.message || err}`, "err");
       } finally {
@@ -831,15 +1122,35 @@ def convert(log_text, config_yaml, dpi):
       }
     });
 
-    saveBtn.addEventListener("click", () => {
-      if (!pngBytes || !selectedFile) return;
-      const name = selectedFile.name.replace(/\.log$/i, "") + ".png";
-      const blob = new Blob([pngBytes], { type: "image/png" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(a.href);
+    saveBtn.addEventListener("click", async () => {
+      const successResults = generatedResults.filter((result) => result.bytes);
+      if (!successResults.length) return;
+
+      saveBtn.disabled = true;
+      setStatus(`正在打包 ZIP（共 ${successResults.length} 个 PNG）...`, "loading");
+      try {
+        const JSZip = await getZipConstructor();
+        const zip = new JSZip();
+        const seenNames = new Map();
+
+        for (const result of successResults) {
+          const zipEntryName = getZipEntryName(getOutputFileName(result.file), seenNames);
+          zip.file(zipEntryName, result.bytes);
+        }
+
+        const zipBlob = await zip.generateAsync({
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: 6 },
+        });
+
+        downloadBlob(getZipFileName(), zipBlob);
+        setStatus(`ZIP 已开始下载，包含 ${successResults.length} 个 PNG。`, "ok");
+      } catch (err) {
+        setStatus(`ZIP 打包失败：${err.message || err}`, "err");
+      } finally {
+        saveBtn.disabled = generatedResults.every((result) => !result.bytes);
+      }
     });
   </script>
 </body>
